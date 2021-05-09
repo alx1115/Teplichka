@@ -1,25 +1,31 @@
 #include <EEPROM.h>
 #include <LCD_1602_RUS.h>
-LCD_1602_RUS lcd(0x27, 16, 2);
 #include <OneWire.h>
 #include <Wire.h>
 #include <DallasTemperature.h>
 #include <GyverTimers.h> 
 
-#define keyDown  A2 
-#define keySelect  A1   // кнопки
-#define keyUp   A0
-#define ZERO_PIN 2    //пин детектора нуля
-#define INT_NUM 0     
-#define DIMMER_PIN1 11 //первый димирующий пин
-#define DIMMER_PIN2 12 //второй димирующий пин
+#define keyDown  A2    //
+#define keySelect  A1  // КНОПКИ
+#define keyUp   A0     //
 
-#define rele1 3  
-#define rele2 4  
+#define ZERO_PIN 2     // ПИН ДЕТЕКТОРА НОЛЯ
+#define INT_NUM 0      // НОМЕР ДЕТЕКТОРА НУЛЯ
 
-int ow=7;                            //
+#define DIMMER_PIN1 11 // ПЕРВЫЙ ДИМИРУЮЩИЙ ПИН
+#define DIMMER_PIN2 12 // ВТОРОЙ ДИМИРУЮЩИЙ ПИН
+
+#define PIN_TRIG 12    // ПИН 
+#define PIN_ECHO 11    // ПИН ЕХОЛОКАЦИИ
+
+#define rele1 3        //  ПИНЫ
+#define rele2 4        // ФРАМУГ 
+
+#define ow=7;                        //
 OneWire oneWire(ow);                 //  ДАТЧИК DS18B20
 DallasTemperature sensors(&oneWire); //
+
+LCD_1602_RUS lcd(0x27, 16, 2);       //  ЕКРАН
 
 long timetem=millis(),currentMillis=millis(),storonatimer=millis(),Millis=millis();
 int witetemp=2000, temp, settemp=22,  loopTime=4000, waitbatton=500,stoped=15,ran=15,maximym=0,minimym=0;
@@ -265,6 +271,20 @@ void sensor(){
   tempu=sensors.getTempCByIndex(0);if (-0.5<=tempu-tempk && tempu-tempk<=0.5){tempu=tempk;}temp=tempu;
   if(tempu>maximym){maximym=tempu;EEPROM.put(50,maximym);}
   if(tempu<minimym && tempu!=-127){minimym=tempu;EEPROM.put(60,minimym);}
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void eho(){
+  digitalWrite(PIN_TRIG, LOW);
+  if ((flag==0)and(micros()-micrus>=5)){
+    digitalWrite(PIN_TRIG, HIGH);
+    micrus=micros();
+    flag=1;
+  }
+  if ((flag==1)and(micros()-micrus>=10)){
+    digitalWrite(PIN_TRIG, LOW);
+    micrus=micros();
+    flag=0;
+  }
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void loop() 
