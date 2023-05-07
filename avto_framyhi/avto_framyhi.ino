@@ -45,9 +45,13 @@ DallasTemperature sensors(&oneWire); //
 
 #define rele1 8                      // Фрамуги
 #define rele2 9                      // Фрамуги
+
+#define relePump 10                  // Насос
 #define releEho 11                   // Реле набора
 
-#define zeroPin 2                   // пин детектора нуля
+#define PIN_ECHO 6                   // Пин рывня води
+
+#define zeroPin 2                    // пин детектора нуля
 const byte dimPins[2]={3, 4};// пины диммеров
 
 int dimmer[2];               // переменная диммера
@@ -57,7 +61,7 @@ byte menuMod = 1, jobMod = 0;
 int klikTime = 300, loopTime = 3000;                   
 int timeCheckTemp = 1000*30;         // Время между измирениями температури в MS
 int temp, lastTemp = 0, minTemp, maxTemp, setTemp, runTime, stopTime, nowWater, needWater;
-unsigned long int millisCheckTemp = millis(), millisKey=millis(), millisTurn = millis(), currentMillis;
+unsigned long int millisCheckTemp = millis(), millisKey=millis(), millisTurn = millis(), currentMillis, millisWater=millis();
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void setup() {
@@ -82,7 +86,7 @@ void setup() {
   sensors.setResolution(0, 12);
   temp = (int)sensors.getTempCByIndex(0);
 
-pinMode( keyUp, INPUT_PULLUP);                     
+  pinMode( keyUp, INPUT_PULLUP);                     
   digitalWrite(keyUp, HIGH);                  
   pinMode(keySelect, INPUT_PULLUP);                  
   digitalWrite(keySelect, HIGH);              
@@ -95,6 +99,8 @@ pinMode( keyUp, INPUT_PULLUP);
   digitalWrite(rele2,1);
   pinMode(releEho,OUTPUT);
   digitalWrite(releEho,flagWater);
+  pinMode(relePump,OUTPUT);
+  digitalWrite(relePump, 1);
   
   lcd.init();                                 
   lcd.backlight();                            
@@ -119,7 +125,6 @@ void isr() {
   if (lastDim[1] != dimmer[1] && dimmer[1]!=0) Timer1.setPeriod(map(lastDim[1] = dimmer[1],0 , 100, 9500, 500));
   else if (dimmer[1]!=0) Timer1.restart();
 }
-
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void menu1(){                               //Меню температури
   //0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5//
@@ -226,7 +231,7 @@ void settings(){
     checkMenu = 1;
     jobMod = 0;workRele();
     flagManual = 0;
-    if (menuMod == 1){
+    if (menuMod == 1){                      //Налаштування температури
       lcd.clear();lcd.setCursor(0, 0);lcd.print("SET ");lcd.print(setTemp);
       currentMillis = millisKey =  millis();
       while(millis()-currentMillis<=loopTime){
@@ -322,7 +327,7 @@ lcd.clear();lcd.setCursor(0, 0);lcd.print("SET ");lcd.print(setTemp);lcd.setCurs
       }
       EEPROM.put(40,runTime);
     }else 
-    if(menuMod == 2){
+    if(menuMod == 2){                       //Налаштування води
    /////0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5//
    //////////////////////////////////////
    //0//Т р е б а   н а б р   1 0 0    //
@@ -336,28 +341,28 @@ lcd.clear();lcd.setCursor(0, 0);lcd.print("SET ");lcd.print(setTemp);lcd.setCurs
        {
         checkZero();
         if(millis()-millisKey>=klikTime){
-          if (analogRead(keyDown)   < 100 ) { needWater--;currentMillis = millis();millisKey=millis();if (needWater<0){needWater=0;} lcd.setCursor(11, 0);lcd.print(needWater);
+          if (analogRead(keyDown)   < 100 ) { needWater--;currentMillis = millis();millisKey=millis();if (needWater<0){needWater=0;} lcd.setCursor(11,0);lcd.print(needWater);
             if(dimmer[0]==99){lcd.setCursor(13,  0);lcd.print(" ");}if(dimmer[0]==9){lcd.setCursor(12,  0);lcd.print("  ");}} 
-          else if (analogRead(keyUp)< 100 ) { needWater++;currentMillis = millis();millisKey=millis();if (needWater>100){needWater=100;} lcd.setCursor(8, 0);lcd.print(dimmer[0]);}
+          else if (analogRead(keyUp)< 100 ) { needWater++;currentMillis = millis();millisKey=millis();if (needWater>100){needWater=100;} lcd.setCursor(11,0);lcd.print(needWater);}
           else if (analogRead(keySelect)< 100) { millisKey=millis();break; }
         } 
        }
        EEPROM.put(90,needWater);
        lcd.setCursor(4,  1);lcd.print(L"Набор ");
-       if (flagWater){lcd.print(L"ON ");}else{lcd.print(L"OFF");}
+       if (!flagWater){lcd.print(L"ON ");}else{lcd.print(L"OFF");}
        while(millis()-currentMillis<=loopTime)
        {
         checkZero();
         if(millis()-millisKey>=klikTime){
           if (analogRead(keyDown)   < 100 || analogRead(keyUp)< 100) {flagWater=!flagWater;
             lcd.setCursor(10,  1);
-            if (flagWater){lcd.print(L"ON ");}else{lcd.print(L"OFF");}
+            if (!flagWater){lcd.print(L"ON ");}else{lcd.print(L"OFF");}
             }
           else if (analogRead(keySelect)< 100) { millisKey=millis();break; }
         } 
        }
     }else 
-    if(menuMod == 3){
+    if(menuMod == 3){                       //Налаштування вентиляляторів
       currentMillis = millis();
       lcd.clear();
       lcd.setCursor(0, 0);lcd.print(L"Вент. 1    % об.");
@@ -430,11 +435,42 @@ if(jobMod == 1){digitalWrite(rele2, 1);digitalWrite(rele1, 0);if(menuMod == 1){l
 void checkZero(){
   if(analogRead(zeroPin)>=990){
     isr();
+    if(millis()-millisWater>=15000){
+    pinMode(PIN_ECHO, OUTPUT);
+    
+    digitalWrite(PIN_ECHO, LOW);
+    delayMicroseconds(5);
+    digitalWrite(PIN_ECHO, HIGH);
+
+    // Выставив высокий уровень сигнала, ждем около 10 микросекунд. В этот момент датчик будет посылать сигналы с частотой 40 КГц.
+    delayMicroseconds(10);
+    digitalWrite(PIN_ECHO, LOW);
+    
+    pinMode(PIN_ECHO, INPUT);
+    
+    //  Время задержки акустического сигнала на эхолокаторе.
+    nowWater = pulseIn(PIN_ECHO, HIGH)/2;       //3223 - 0
+    millisWater = millis();
+    }
   }
+  
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void checkWater(){
+  if(nowWater == 0){
+    digitalWrite(relePump, 0);
+  }else{
+    digitalWrite(relePump, 1);
+  }
+//  if(waterNow>=waterNeed){
+//    flagWater = 1;
+//  }
+  digitalWrite(releEho, flagWater);
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void loop() {  
   checkTemp();
+  checkWater();
   menu();
   checkZero();
   avto();
