@@ -43,10 +43,10 @@ DallasTemperature sensors(&oneWire); //
 #define keySelect  A6                // Кнопки
 #define keyUp      A3                //
 
-#define rele1 8                      // Фрамуги
+#define rele1 8                      // Фрамуги (10)
 #define rele2 9                      // Фрамуги
 
-#define relePump 10                  // Насос
+#define relePump 10                  // Насос (8)
 #define releEho 11                   // Реле набора
 
 #define PIN_ECHO 6                   // Пин рывня води
@@ -101,6 +101,8 @@ void setup() {
   digitalWrite(releEho,flagWater);
   pinMode(relePump,OUTPUT);
   digitalWrite(relePump, 1);
+
+  checkEho();
   
   lcd.init();                                 
   lcd.backlight();                            
@@ -154,7 +156,7 @@ void menu2(){                               //Меню води
   //Т р е б а   н а б р   1 0 0   |//
   //З а р а з   в о д и   1 0 0   |//
   ///////////////////////////////////
-  lcd.setCursor(0,  0);lcd.print(L"Треба набр");
+  lcd.setCursor(0,  0);lcd.print(L"Треба набр");lcd.setCursor(15,  0);lcd.print(flagWater);
   lcd.setCursor(0,  1);lcd.print(L"Зараз води");
   lcd.setCursor(11,  0);lcd.print(needWater);
   lcd.setCursor(11,  1);lcd.print(nowWater);
@@ -341,8 +343,7 @@ lcd.clear();lcd.setCursor(0, 0);lcd.print("SET ");lcd.print(setTemp);lcd.setCurs
        {
         checkZero();
         if(millis()-millisKey>=klikTime){
-          if (analogRead(keyDown)   < 100 ) { needWater--;currentMillis = millis();millisKey=millis();if (needWater<0){needWater=0;} lcd.setCursor(11,0);lcd.print(needWater);
-            if(dimmer[0]==99){lcd.setCursor(13,  0);lcd.print(" ");}if(dimmer[0]==9){lcd.setCursor(12,  0);lcd.print("  ");}} 
+          if (analogRead(keyDown)   < 100 ) { needWater--;currentMillis = millis();millisKey=millis();if (needWater<0){needWater=0;} lcd.setCursor(11,0);lcd.print(needWater);lcd.print(" ");}
           else if (analogRead(keyUp)< 100 ) { needWater++;currentMillis = millis();millisKey=millis();if (needWater>100){needWater=100;} lcd.setCursor(11,0);lcd.print(needWater);}
           else if (analogRead(keySelect)< 100) { millisKey=millis();break; }
         } 
@@ -353,12 +354,16 @@ lcd.clear();lcd.setCursor(0, 0);lcd.print("SET ");lcd.print(setTemp);lcd.setCurs
        while(millis()-currentMillis<=loopTime)
        {
         checkZero();
-        if(millis()-millisKey>=klikTime){
-          if (analogRead(keyDown)   < 100 || analogRead(keyUp)< 100) {flagWater=!flagWater;
-            lcd.setCursor(10,  1);
-            if (!flagWater){lcd.print(L"ON ");}else{lcd.print(L"OFF");}
+        if(millis()-millisKey>=klikTime)
+        {
+          if (analogRead(keyDown)   < 100 || analogRead(keyUp)< 100) 
+          {
+            millisKey = millis();
+            flagWater=!flagWater;
+            lcd.setCursor(10,  1);if (!flagWater){lcd.print(L"ON ");}else{lcd.print(L"OFF");}
             }
           else if (analogRead(keySelect)< 100) { millisKey=millis();break; }
+          
         } 
        }
     }else 
@@ -435,42 +440,52 @@ if(jobMod == 1){digitalWrite(rele2, 1);digitalWrite(rele1, 0);if(menuMod == 1){l
 void checkZero(){
   if(analogRead(zeroPin)>=990){
     isr();
-    if(millis()-millisWater>=15000){
-    pinMode(PIN_ECHO, OUTPUT);
-    
-    digitalWrite(PIN_ECHO, LOW);
-    delayMicroseconds(5);
-    digitalWrite(PIN_ECHO, HIGH);
-
-    // Выставив высокий уровень сигнала, ждем около 10 микросекунд. В этот момент датчик будет посылать сигналы с частотой 40 КГц.
-    delayMicroseconds(10);
-    digitalWrite(PIN_ECHO, LOW);
-    
-    pinMode(PIN_ECHO, INPUT);
-    
-    //  Время задержки акустического сигнала на эхолокаторе.
-    nowWater = pulseIn(PIN_ECHO, HIGH)/2;       //3223 - 0
-    millisWater = millis();
-    }
   }
   
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void checkWater(){
-  if(nowWater == 0){
-    digitalWrite(relePump, 0);
-  }else{
-    digitalWrite(relePump, 1);
-  }
-//  if(waterNow>=waterNeed){
-//    flagWater = 1;
-//  }
-  digitalWrite(releEho, flagWater);
+void checkEho(){
+  pinMode(PIN_ECHO, OUTPUT);
+    
+  digitalWrite(PIN_ECHO, LOW);
+  delayMicroseconds(5);
+  digitalWrite(PIN_ECHO, HIGH);
+
+  // Выставив высокий уровень сигнала, ждем около 10 микросекунд. В этот момент датчик будет посылать сигналы с частотой 40 КГц.
+  delayMicroseconds(10);
+  digitalWrite(PIN_ECHO, LOW);
+  
+  pinMode(PIN_ECHO, INPUT);
+  
+  //  Время задержки акустического сигнала на эхолокаторе.
+  nowWater =map(pulseIn(PIN_ECHO, HIGH)/2, 3223, 795, 0, 100);//map(pulseIn(PIN_ECHO, HIGH)/2, 3223, 30, 0, 100);//З опаленням теплиця(3223 - 0; 30 - 100)
+  millisWater = millis();
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void loop() {  
+void checkWater(){
+  if(nowWater == 0){
+    digitalWrite(relePump, 1);
+  }else{
+    digitalWrite(relePump, 0);
+  }
+  if(nowWater>=needWater && flagWater == 0){
+    flagWater = 1;
+  }
+  if(flagWater){
+    pinMode(releEho, INPUT);
+    digitalWrite(releEho, 1);
+  }else{
+    pinMode(releEho, OUTPUT);
+    digitalWrite(releEho, 0);
+  }
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void loop() { 
+  checkWater(); 
   checkTemp();
-  checkWater();
+  if(millis()-millisWater>=15000){
+      checkEho();
+    }
   menu();
   checkZero();
   avto();
